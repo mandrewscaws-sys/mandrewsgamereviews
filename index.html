@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Game Reviews</title>
+  <meta name="theme-color" content="#000000">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header id="top">
+    <div class="row1">
+      <h1>Game Reviews</h1>
+      <span id="status"></span>
+      <div class="buttons">
+        <button id="btn-refresh" title="Refresh from the sheet">&#8635;</button>
+        <button id="btn-compare">Compare</button>
+        <button id="btn-add">&#65291; Add</button>
+        <button id="btn-settings" title="Settings">&#9881;</button>
+      </div>
+    </div>
+    <div id="controls" class="controls"></div>
+  </header>
+  <main id="content"></main>
+  <div id="toast"></div>
+  <script src="logic.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
