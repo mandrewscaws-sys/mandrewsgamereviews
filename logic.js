@@ -29,16 +29,17 @@
       { min: 3,    color: '#ff9f1c' },
       { min: 0,    color: '#e63946' },
     ],
-    genreWeights: {
-      'RPG':         { Gameplay: 0.45, Visuals: 0.15, Story: 0.30, Sound: 0.10 },
-      'Platform':    { Gameplay: 0.45, Visuals: 0.30, Story: 0.15, Sound: 0.10 },
-      'Action':      { Gameplay: 0.45, Visuals: 0.30, Story: 0.15, Sound: 0.10 },
-      'Puzzle':      { Gameplay: 0.50, Visuals: 0.30, Story: 0.10, Sound: 0.10 },
-      'Slash-Em-Up': { Gameplay: 0.45, Visuals: 0.25, Story: 0.20, Sound: 0.10 },
-      'Sports':      { Gameplay: 0.50, Visuals: 0.30, Story: 0.00, Sound: 0.20 },
-      'Fighting':    { Gameplay: 0.50, Visuals: 0.30, Story: 0.00, Sound: 0.20 },
-      'Misc':        { Gameplay: 0.50, Visuals: 0.30, Story: 0.00, Sound: 0.20 },
-      'Other':       { Gameplay: 0.45, Visuals: 0.30, Story: 0.15, Sound: 0.10 },
+    // Overall weights per genre, for the nine ratings in columns N to V.
+    // A rating that isn't listed for a genre isn't used (or asked for) for that genre.
+    genreWeightsV2: {
+      'Action':   { Story: 0.15, Combat: 0.20, Gameplay: 0.25, Audio: 0.10, Visual: 0.30 },
+      'Fighting': { Characters: 0.20, Combat: 0.30, Audio: 0.10, Visual: 0.10, Variety: 0.30 },
+      'Misc':     { Gameplay: 0.50, Audio: 0.10, Visual: 0.20, Variety: 0.20 },
+      'Platform': { Story: 0.10, Gameplay: 0.40, Control: 0.20, 'Level Design': 0.10, Audio: 0.10, Visual: 0.10 },
+      'RPG':      { Story: 0.20, Characters: 0.10, Combat: 0.25, Gameplay: 0.25, Audio: 0.10, Visual: 0.10 },
+      'Sports':   { Characters: 0.20, Gameplay: 0.30, Audio: 0.10, Visual: 0.10, Variety: 0.30 },
+      // any genre that isn't listed: every rating counts about the same
+      'Other':    { Story: 0.12, Characters: 0.11, Combat: 0.11, Gameplay: 0.11, Control: 0.11, 'Level Design': 0.11, Audio: 0.11, Visual: 0.11, Variety: 0.11 },
     },
   };
 
@@ -129,11 +130,16 @@
     if (!rows.length) return { games: [], categories: [] };
     const headers = rows[0].map(h => h.trim());
     const col = name => { const i = headers.indexOf(name); return i < 0 ? null : i; };
-    const iGame = col('Game'), iRel = col('Release'), iAll = col('Overall'), iRev = col('Review');
+    const overallCols = headers.map((h, j) => h === 'Overall' ? j : -1).filter(j => j >= 0);
+    const iGame = col('Game'), iRel = col('Release'), iRev = col('Review');
+    const iAll = overallCols.length ? overallCols[overallCols.length - 1] : null;   // the LAST "Overall" counts
     const iTags = col('Tags') !== null ? col('Tags') : col('Tag');
     if (iGame === null || iAll === null) throw new Error("Couldn't find the 'Game' and 'Overall' columns in the sheet.");
+    // The ratings sit between the previous "Overall" (old ratings, ignored) and the last one.
+    // With only one "Overall" they start after Release.
     const catCols = [];
-    if (iRel !== null && iRel < iAll) for (let j = iRel + 1; j < iAll; j++) if (headers[j] && j !== iTags) catCols.push(j);
+    const start = overallCols.length > 1 ? overallCols[overallCols.length - 2] + 1 : (iRel !== null ? iRel + 1 : null);
+    if (start !== null) for (let j = start; j < iAll; j++) if (headers[j] && j !== iTags && j !== iRev) catCols.push(j);
     const metaCols = headers.map((h, j) => ['Type', 'Platform', 'Year'].includes(h) ? j : -1).filter(j => j >= 0);
     const games = [];
     for (const raw of rows.slice(1)) {
@@ -287,7 +293,7 @@
     const wanted = (genre || '').trim().toLowerCase();
     let chosen = null;
     for (const [name, w] of Object.entries(table)) if (name.trim().toLowerCase() === wanted) { chosen = w; break; }
-    if (!chosen) chosen = table.Other || DEFAULTS.genreWeights.Other;
+    if (!chosen) chosen = table.Other || DEFAULTS.genreWeightsV2.Other;
     const out = {};
     for (const c of categories) out[c] = Number(chosen[c] || 0);
     return out;

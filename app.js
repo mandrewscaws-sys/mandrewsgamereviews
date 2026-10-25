@@ -385,6 +385,7 @@
         grid.append(ta, el('div', {}), tb, sa, el('div', {}), sb);
         const av = Object.fromEntries(a.cats), bv = Object.fromEntries(b.cats);
         for (const cat of categories.length ? categories : a.cats.map(c => c[0])) {
+          if (!(cat in av) && !(cat in bv)) continue;          // neither game has this rating
           const na = parseFloat(av[cat]), nb = parseFloat(bv[cat]);
           const part = (n, text, leftSide, other) => {
             const win = !Number.isNaN(n) && (Number.isNaN(other) || n > other);
@@ -408,7 +409,7 @@
   // ------------------------------------------------------------------ add a game
   function openAdd() {
     if (!S.addUrl || !S.addKey) { toast('Add the helper address and secret key in Settings first.'); openSettings(); return; }
-    const cats = categories.length ? categories : ['Gameplay', 'Visuals', 'Story', 'Sound'];
+    const cats = categories.length ? categories : ['Story', 'Characters', 'Combat', 'Gameplay', 'Control', 'Level Design', 'Audio', 'Visual', 'Variety'];
     openOverlay((panel, o) => {
       const genres = [...new Set(allGames.map(g => g.meta.Type).filter(Boolean))].sort();
       const platforms = [...new Set(allGames.map(g => g.meta.Platform).filter(Boolean))].sort();
@@ -423,11 +424,13 @@
       const pick = el('select', { onchange: e => { if (e.target.value) tags.value = G.splitTags(tags.value + ',' + e.target.value).join(', '); e.target.value = ''; } },
         el('option', { value: '' }, 'add an existing tag...'), known.map(t => el('option', { value: t }, t)));
 
+      const rows = {};
       function update() {
-        const w = G.weightsFor(genre.value, S.genreWeights, cats), sc = {};
+        const w = G.weightsFor(genre.value, S.genreWeightsV2, cats), sc = {};
+        for (const c of cats) for (const node of rows[c] || []) if (node) node.style.display = w[c] > 0 ? '' : 'none';   // only the ratings this genre uses
         for (const c of cats) {
           const t = scores[c].value.trim();
-          if (!t && !w[c]) { sc[c] = 0; continue; }
+          if (!w[c]) { sc[c] = 0; continue; }
           if (t === '' || Number.isNaN(Number(t))) { preview.textContent = 'Overall: fill in all the scores to see it'; preview.style.color = ''; return; }
           sc[c] = Number(t);
         }
@@ -446,10 +449,11 @@
         el('div', { class: 'form' },
           row('Game', name), row('Year played', year), row('Genre', genre), row('Platform', platform),
           row('Release date', release, 'day/month/year, e.g. 24/11/1998'),
-          cats.map(c => row(c, scores[c], '0 to 5')),
+          cats.map(c => (rows[c] = row(c, scores[c], '0 to 5'))),
           row('Tags', el('div', {}, tags, pick), 'comma separated, e.g. co-op, retro'),
           row('Review', review)),
         preview, error, el('div', { class: 'footer' }, el('button', { onclick: closeOverlay }, 'Cancel'), save));
+      update();
 
       async function submit() {
         error.textContent = '';
@@ -459,10 +463,10 @@
         if (!genre.value.trim() || !platform.value.trim()) return fail('Please choose a genre and a platform.');
         let iso = null;
         if (release.value.trim()) { iso = G.toIsoDate(release.value); if (!iso) return fail('The release date should look like 24/11/1998 (day/month/year).'); }
-        const w = G.weightsFor(genre.value, S.genreWeights, cats), sc = {};
+        const w = G.weightsFor(genre.value, S.genreWeightsV2, cats), sc = {};
         for (const c of cats) {
           const t = scores[c].value.trim();
-          if (!t && !w[c]) continue;
+          if (!w[c]) continue;                                 // this genre doesn't use that rating
           const v = Number(t);
           if (t === '' || Number.isNaN(v)) return fail('Please enter a score for ' + c + '.');
           if (v < 0 || v > G.MAX_CATEGORY) return fail(c + ' must be between 0 and 5.');
@@ -521,7 +525,7 @@
       }
       const overall = rangeEditor(S.ranges, 0, 100, 1), bars = rangeEditor(S.barRanges, 0, 5, 0.25);
 
-      const cats = categories.length ? categories : ['Gameplay', 'Visuals', 'Story', 'Sound'];
+      const cats = categories.length ? categories : ['Story', 'Characters', 'Combat', 'Gameplay', 'Control', 'Level Design', 'Audio', 'Visual', 'Variety'];
       const wbody = el('tbody', {});
       const addWeight = (genre, w, fixed) => {
         const inputs = cats.map(c => el('input', { type: 'number', min: 0, max: 100, step: 5, value: +((w[c] || 0) * 100).toFixed(2) }));
@@ -532,8 +536,8 @@
           el('td', {}, fixed ? '' : el('button', { onclick: () => row.remove() }, 'Remove')));
         wbody.append(row);
       };
-      for (const [genre, w] of Object.entries(S.genreWeights)) addWeight(genre, w, genre === 'Other');
-      if (!('Other' in S.genreWeights)) addWeight('Other', G.DEFAULTS.genreWeights.Other, true);
+      for (const [genre, w] of Object.entries(S.genreWeightsV2)) addWeight(genre, w, genre === 'Other');
+      if (!('Other' in S.genreWeightsV2)) addWeight('Other', G.DEFAULTS.genreWeightsV2.Other, true);
       const readWeights = () => {
         const out = {};
         for (const row of wbody.children) {
@@ -592,7 +596,7 @@
             showTagsOnCovers: showTags.checked, backgroundImage: bg.value.trim(), backgroundMirror: mirror.checked,
             coverSize: sizeAuto.checked ? 0 : Number(size.value),
             addUrl: addUrl.value.trim(), addKey: addKey.value.trim(),
-            ranges: overall.read(), barRanges: bars.read(), genreWeights: readWeights() });
+            ranges: overall.read(), barRanges: bars.read(), genreWeightsV2: readWeights() });
           if (!G.sheetCsvUrl(next)) throw new Error("That doesn't look like a Google Sheet link.");
           if (next.addUrl && !/^https:\/\//.test(next.addUrl)) throw new Error('The helper web address should start with https://');
           const sheetChanged = G.sheetCsvUrl(next) !== G.sheetCsvUrl(S);
