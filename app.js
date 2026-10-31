@@ -43,8 +43,15 @@
 
   // ------------------------------------------------------------------ data
   let allGames = [], categories = [], view = [], lastText = null;
+  let area = 'menu';        // 'menu', 'games' or 'friends'
 
-  function setStatus(text) { $('#status').textContent = text; }
+  // The status line belongs to whichever area is on screen.
+  const statuses = { games: '', friends: '' };
+  function setStatus(text, which) {
+    which = which || 'games';
+    statuses[which] = text;
+    if (which === area) $('#status').textContent = text;
+  }
 
   function setData(parsed) {
     allGames = parsed.games; categories = parsed.categories;
@@ -210,7 +217,7 @@
     const root = el('div', { class: 'overlay', onclick: e => { if (e.target === root) closeOverlay(); } }, panel);
     document.body.append(root);
     document.body.classList.add('noscroll');
-    history.pushState({ overlay: overlays.length + 1 }, '');
+    history.pushState({ area, overlay: overlays.length + 1 }, '');
     const o = { root, panel };
     overlays.push(o);
     build(panel, o);
@@ -219,12 +226,14 @@
   const closeOverlay = () => { if (overlays.length) history.back(); };
   function removeTop() {
     const o = overlays.pop();
-    if (o) o.root.remove();
+    if (o) { o.root.remove(); if (o.onClose) o.onClose(); }
     if (!overlays.length) document.body.classList.remove('noscroll');
   }
+  const closeAll = () => { if (overlays.length) history.go(-overlays.length); };
   window.addEventListener('popstate', () => {
-    const depth = (history.state && history.state.overlay) || 0;
-    while (overlays.length > depth) removeTop();
+    const state = history.state || {};
+    while (overlays.length > (state.overlay || 0)) removeTop();
+    if ((state.area || 'menu') !== area) showArea(state.area || 'menu', false);      // the phone's back button
   });
   document.addEventListener('keydown', e => {
     const o = overlays[overlays.length - 1];
@@ -506,6 +515,14 @@
       const size = el('input', { type: 'range', min: 90, max: 400, step: 10, value: S.coverSize || tileSize() });
       const sizeAuto = el('input', { type: 'checkbox' }); sizeAuto.checked = !S.coverSize;
       const addUrl = text(S.addUrl, { placeholder: 'https://script.google.com/macros/s/.../exec' }), addKey = text(S.addKey);
+      const friendsUrl = text(S.friendsUrl, { placeholder: 'https://script.google.com/macros/s/.../exec' }), friendsKey = text(S.friendsKey);
+      const colour = key => el('input', { type: 'color', value: S.friendColours[key] });
+      const cGreen = colour('green'), cAmber = colour('amber'), cRed = colour('red');
+      const defGreen = el('input', { type: 'number', min: 0, step: 1, value: S.defaultGreenDays });
+      const defAmber = el('input', { type: 'number', min: 0, step: 1, value: S.defaultAmberDays });
+      const friendsBg = text(S.friendsBackground, { placeholder: 'friends-background.png (blank = plain colour)' });
+      const friendsMirror = el('input', { type: 'checkbox' }); friendsMirror.checked = !!S.friendsBackgroundMirror;
+      const menuFolder = text(S.menuFolder);
 
       function rangeEditor(list, low, high, step) {
         const box = el('div', {});
@@ -571,6 +588,12 @@
           f('Overall score (out of 100)', overall.node), f('Category bars (out of 5)', bars.node),
           el('div', { class: 'sethead' }, 'Adding games (stays on this device only)'),
           f('Helper web address', addUrl), f('Secret key', addKey),
+          el('div', { class: 'sethead' }, 'Friends (stays on this device only)'),
+          f('Friends helper address', friendsUrl), f('Friends secret key', friendsKey),
+          f('Colours', el('div', { class: 'rangerow' }, cGreen, ' green ', cAmber, ' amber ', cRed, ' red')),
+          f('New friends start with', el('div', {}, 'green until ', defGreen, ' days, amber until ', defAmber, ' days'), 'Each friend can have their own numbers when you add or edit them.'),
+          f('Friends background', friendsBg), f('Flip every other repeat', friendsMirror),
+          f('Menu pictures folder', menuFolder, 'Optional: a picture named Friends.png or Game Reviews.png replaces that menu box.'),
           el('div', { class: 'sethead' }, 'Overall score weights by genre (%)'),
           el('div', { style: { gridColumn: '1 / -1', overflowX: 'auto' } },
             el('table', { class: 'wtable' }, el('thead', {}, el('tr', {}, el('th', {}, 'Genre'), cats.map(c => el('th', {}, c)), el('th', {}, 'Total'), el('th', {}))), wbody),
@@ -596,9 +619,17 @@
             showTagsOnCovers: showTags.checked, backgroundImage: bg.value.trim(), backgroundMirror: mirror.checked,
             coverSize: sizeAuto.checked ? 0 : Number(size.value),
             addUrl: addUrl.value.trim(), addKey: addKey.value.trim(),
+            friendsUrl: friendsUrl.value.trim(), friendsKey: friendsKey.value.trim(),
+            friendColours: { green: cGreen.value, amber: cAmber.value, red: cRed.value },
+            defaultGreenDays: Number(defGreen.value), defaultAmberDays: Number(defAmber.value),
+            friendsBackground: friendsBg.value.trim(), friendsBackgroundMirror: friendsMirror.checked,
+            menuFolder: menuFolder.value.trim() || 'menu',
             ranges: overall.read(), barRanges: bars.read(), genreWeightsV2: readWeights() });
           if (!G.sheetCsvUrl(next)) throw new Error("That doesn't look like a Google Sheet link.");
           if (next.addUrl && !/^https:\/\//.test(next.addUrl)) throw new Error('The helper web address should start with https://');
+          if (next.friendsUrl && !/^https:\/\//.test(next.friendsUrl)) throw new Error('The Friends helper address should start with https://');
+          if (![next.defaultGreenDays, next.defaultAmberDays].every(n => Number.isInteger(n) && n >= 0) || next.defaultAmberDays < next.defaultGreenDays)
+            throw new Error('For new friends, green and amber should be whole numbers of days, with amber the same as green or more.');
           const sheetChanged = G.sheetCsvUrl(next) !== G.sheetCsvUrl(S);
           S = next; saveSettings(); closeOverlay(); finish(sheetChanged);
         } catch (e) { error.textContent = e.message; }
@@ -606,40 +637,90 @@
     }, 'settings');
   }
   function finish(sheetChanged) {
-    resolved.clear(); applyBackground(); applyView();
+    resolved.clear(); applyBackground(); applyView(); renderMenu(); setHeader();
+    applyBackgroundTo($('#friends'), S.friendsBackground, S.friendsBackgroundMirror);
+    if (window.Friends) window.Friends.rerender();
     if (sheetChanged) { lastText = null; refresh(false); }
   }
 
   // ------------------------------------------------------------------ background picture
-  function applyBackground() {
-    const content = $('#content');
-    content.style.backgroundImage = '';
-    if (!S.backgroundImage) return;
+  // Puts a (repeating) picture behind an area. Mirrored, so the edges always join up.
+  function applyBackgroundTo(container, image, mirror) {
+    container.style.backgroundImage = '';
+    container.style.backgroundSize = '';
+    if (!image) return;
     const img = new Image();
     img.onload = () => {
-      if (!S.backgroundMirror) { content.style.backgroundImage = `url("${S.backgroundImage}")`; content.style.backgroundSize = ''; return; }
+      if (!mirror) { container.style.backgroundImage = `url("${image}")`; return; }
       const w = img.naturalWidth, h = img.naturalHeight, c = document.createElement('canvas');   // 2x2 mirrored tile
       c.width = w * 2; c.height = h * 2;
       const x = c.getContext('2d');
       for (const [mx, my] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
-        x.save(); x.translate(mx * w * 2 / 2 + (mx ? w : 0), my * h + (my ? h : 0)); x.scale(mx ? -1 : 1, my ? -1 : 1); x.drawImage(img, 0, 0); x.restore();
+        x.save(); x.translate(mx * w + (mx ? w : 0), my * h + (my ? h : 0)); x.scale(mx ? -1 : 1, my ? -1 : 1); x.drawImage(img, 0, 0); x.restore();
       }
-      content.style.backgroundImage = `url(${c.toDataURL('image/jpeg', 0.9)})`;
-      content.style.backgroundSize = `${w * 2}px ${h * 2}px`;
+      container.style.backgroundImage = `url(${c.toDataURL('image/jpeg', 0.9)})`;
+      container.style.backgroundSize = `${w * 2}px ${h * 2}px`;
     };
-    img.src = S.backgroundImage;
+    img.src = image;
+  }
+  const applyBackground = () => applyBackgroundTo($('#content'), S.backgroundImage, S.backgroundMirror);
+
+  // ------------------------------------------------------------------ the menu and the areas
+  const TITLES = { menu: 'My Life', games: 'Game Reviews', friends: 'Friends' };
+
+  function setHeader() {
+    document.title = TITLES[area];
+    $('#title').textContent = TITLES[area];
+    $('#btn-menu').hidden = area === 'menu';
+    $('#controls').hidden = area !== 'games';
+    $('#status').textContent = statuses[area] || '';
+    const buttons = area === 'games'
+      ? [['\u21BB', () => refresh(true), 'Refresh from the sheet'], ['Compare', () => openCompare()], ['\uFF0B Add', openAdd], ['\u2699', openSettings, 'Settings']]
+      : area === 'friends'
+        ? [['\u21BB', () => Friends.refresh(true), 'Refresh'], ['\uFF0B Add friend', () => Friends.addFriend()], ['\u2699', openSettings, 'Settings']]
+        : [['\u2699', openSettings, 'Settings']];
+    $('#buttons').replaceChildren(...buttons.map(([label, handler, title]) => el('button', { onclick: handler, title: title || '' }, label)));
+  }
+
+  function showArea(name, push) {
+    area = name;
+    $('#menu').hidden = name !== 'menu';
+    $('#content').hidden = name !== 'games';
+    $('#friends').hidden = name !== 'friends';
+    if (push) history.pushState({ area: name, overlay: 0 }, '');
+    setHeader();
+    window.scrollTo(0, 0);
+    if (name === 'friends' && window.Friends) window.Friends.onShow();
+  }
+
+  function renderMenu() {
+    const menu = $('#menu');
+    menu.style.setProperty('--tile', tileSize() + 'px');
+    const tile = (label, key) => {
+      const go = () => showArea(key, true);
+      const t = el('div', { class: 'tile menutile texttile', tabindex: '0', role: 'button', 'aria-label': label, onclick: go, onkeydown: e => { if (e.key === 'Enter') go(); } });
+      const img = el('img', { class: 'cover', alt: '' });
+      t.append(img, el('div', { class: 'bigname' }, label), el('div', { class: 'bar' }, el('span', { class: 'name', style: { fontSize: '8cqw' } }, label)));
+      // a picture named after the tile (menu/Friends.png) replaces the plain box
+      loadPicture(img, S.menuFolder, label, () => img.remove(), () => t.classList.remove('texttile'));
+      return t;
+    };
+    menu.replaceChildren(el('div', { class: 'grid' }, tile('Game Reviews', 'games'), tile('Friends', 'friends')));
   }
 
   // ------------------------------------------------------------------ start up
-  buildControls();
-  $('#btn-refresh').onclick = () => refresh(true);
-  $('#btn-compare').onclick = () => openCompare();
-  $('#btn-add').onclick = openAdd;
-  $('#btn-settings').onclick = openSettings;
-  window.addEventListener('resize', () => $('#content').style.setProperty('--tile', tileSize() + 'px'));
-  applyBackground();
-  loadCache();
-  refresh(false);
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+  function start() {
+    buildControls();
+    $('#btn-menu').onclick = () => { if (history.state && history.state.area) history.back(); else showArea('menu', false); };
+    window.addEventListener('resize', () => { $('#content').style.setProperty('--tile', tileSize() + 'px'); $('#menu').style.setProperty('--tile', tileSize() + 'px'); });
+    history.replaceState(null, '');
+    renderMenu();
+    showArea('menu', false);
+    applyBackground();
+    loadCache();
+    refresh(false);
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+  window.GRApp = { el, toast, openOverlay, closeOverlay, closeAll, closeButton, swipe, settings: () => S, setStatus, loadPicture, applyBackgroundTo, openSettings, start };
   window.__GR = { get games() { return allGames; }, get view() { return view; } };   // handy for testing
 })();

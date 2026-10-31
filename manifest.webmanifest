@@ -1,6 +1,6 @@
 {
-  "name": "Game Reviews",
-  "short_name": "Game Reviews",
+  "name": "My Life",
+  "short_name": "My Life",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -15,6 +15,14 @@
     showTagsOnCovers: true,
     backgroundImage: 'background.png',
     backgroundMirror: true,
+    menuFolder: 'menu',                 // optional pictures for the menu tiles (Game Reviews.png, Friends.png)
+    friendsUrl: '',                     // the Friends helper web address (kept on this device only)
+    friendsKey: '',                     // the Friends secret key (kept on this device only)
+    friendColours: { green: '#5a9a50', amber: '#fbb12c', red: '#ff2a2a' },
+    defaultGreenDays: 30,               // new friends start with these (each friend can have their own)
+    defaultAmberDays: 60,
+    friendsBackground: 'friends-background.png',
+    friendsBackgroundMirror: true,
     addUrl: '',                         // the helper web address (kept on this device only)
     addKey: '',                         // the secret key (kept on this device only)
     ranges: [
@@ -319,7 +327,70 @@
   // ---------- picture file names ----------
   function safeFileName(name) { return String(name || '').replace(/[\\/:*?"<>|]/g, '').trim(); }
 
-  root.GR = { MAX_CATEGORY, DEFAULTS, formatNumber, parseScore, numberIn, splitTags, parseDate, toIsoDate,
+  // ---------- friends ----------
+  const DAY_MS = 86400000;
+  const ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
+  function isoToUtc(iso) { const m = ISO.exec(iso || ''); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : null; }
+  function todayIso(now) {
+    const d = now || new Date(), pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+  function daysBetween(fromIso, toIso) {
+    const a = isoToUtc(fromIso), b = isoToUtc(toIso);
+    return a === null || b === null ? null : Math.round((b - a) / DAY_MS);
+  }
+  function formatIso(iso) { const m = ISO.exec(iso || ''); return m ? `${m[3]}/${m[2]}/${m[1]}` : ''; }
+
+  // The most recent meetup that has already happened.
+  function lastMeetup(friend, today) {
+    const past = (friend.meetups || []).map(m => m.date).filter(d => ISO.test(d) && d <= today);
+    return past.length ? past.sort().pop() : null;
+  }
+  function friendDays(friend, today) { const last = lastMeetup(friend, today); return last ? daysBetween(last, today) : null; }
+  // green until greenDays, amber until amberDays, red after that
+  function friendColourKey(days, green, amber) {
+    if (days === null) return 'none';
+    return days <= green ? 'green' : days <= amber ? 'amber' : 'red';
+  }
+  function daysLabel(days) { return days === null ? '--' : days === 0 ? 'Today' : days === 1 ? '1 Day' : days + ' Days'; }
+
+  // Longest time since you met first; friends you haven't met yet go last.
+  function sortFriends(friends, today) {
+    return friends.slice().sort((a, b) => {
+      const da = friendDays(a, today), db = friendDays(b, today);
+      if (da === null && db === null) return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+      if (da === null) return 1;
+      if (db === null) return -1;
+      return db - da || a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+    });
+  }
+  function yearCounts(meetups, today) {
+    const counts = {};
+    for (const m of meetups) if (ISO.test(m.date) && (!today || m.date <= today)) counts[m.date.slice(0, 4)] = (counts[m.date.slice(0, 4)] || 0) + 1;
+    return Object.entries(counts).sort((a, b) => b[0] - a[0]);
+  }
+  function gaps(meetups, today) {
+    const dates = meetups.map(m => m.date).filter(d => ISO.test(d) && (!today || d <= today)).sort();
+    const out = [];
+    for (let i = 1; i < dates.length; i++) out.push(daysBetween(dates[i - 1], dates[i]));
+    return out;
+  }
+  const averageGap = (meetups, today) => { const g = gaps(meetups, today); return g.length ? Math.round(g.reduce((a, b) => a + b, 0) / g.length) : null; };
+  const longestGap = (meetups, today) => { const g = gaps(meetups, today); return g.length ? Math.max(...g) : null; };
+
+  // What the helper sends back -> friends with their meetups attached (newest first)
+  function normalizeFriends(raw) {
+    const byFriend = {};
+    for (const m of (raw.meetups || [])) (byFriend[m.friendId] = byFriend[m.friendId] || []).push({ id: m.id, date: m.date, note: m.note || '' });
+    return (raw.friends || []).map(f => ({
+      id: f.id, name: f.name, greenDays: f.greenDays, amberDays: f.amberDays,
+      nextPlanned: f.nextPlanned || '', photo: f.photo || '',
+      meetups: (byFriend[f.id] || []).sort((a, b) => b.date.localeCompare(a.date)),
+    }));
+  }
+
+  root.GR = { MAX_CATEGORY, isoToUtc, todayIso, daysBetween, formatIso, lastMeetup, friendDays, friendColourKey, daysLabel,
+    sortFriends, yearCounts, averageGap, longestGap, normalizeFriends, DEFAULTS, formatNumber, parseScore, numberIn, splitTags, parseDate, toIsoDate,
     parseCsv, parseSheet, sheetCsvUrl, colourFor, SORTS, sortGames, GROUPS, bandLabel, groupGames, FILTERS,
     gameValues, rankLines, comparePool, weightsFor, overallPercent, buildAddPayload, safeFileName };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.GR;
