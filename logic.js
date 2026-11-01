@@ -15,6 +15,16 @@
     showTagsOnCovers: true,
     backgroundImage: 'background.png',
     backgroundMirror: true,
+    filmSheetTab: 'Film Ratings',       // the tab that holds your films
+    postersFolder: 'posters',           // your own poster pictures, named after the film
+    genresFolder: 'genres',             // small genre pictures: Horror.png, Comedy.png ...
+    tmdbKey: '',                        // optional: lets the app look up missing posters (kept on this device only)
+    movieRanges: [
+      { min: 90, color: '#22b14c' },
+      { min: 75, color: '#9acd32' },
+      { min: 60, color: '#ff9f1c' },
+      { min: 0,  color: '#e63946' },
+    ],
     menuFolder: 'menu',                 // optional pictures for the menu tiles (Game Reviews.png, Friends.png)
     friendsUrl: '',                     // the Friends helper web address (kept on this device only)
     friendsKey: '',                     // the Friends secret key (kept on this device only)
@@ -89,7 +99,7 @@
 
   // Dates are read DAY first (UK): 24/11/1998. Returns a number that sorts by date.
   function parseDate(text) {
-    const t = String(text || '').trim();
+    const t = String(text || '').trim().replace(/([\/.\-])\1+/g, '$1');
     let m;
     if (!t) return null;
     if ((m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/.exec(t))) return makeDate(+m[3], +m[2], +m[1]);
@@ -103,7 +113,7 @@
 
   // '24/11/1998' -> '1998-11-24' (only full dates)
   function toIsoDate(text) {
-    const t = String(text || '').trim();
+    const t = String(text || '').trim().replace(/([\/.\-])\1+/g, '$1');
     let m, y, mo, d;
     if ((m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/.exec(t))) { d = +m[1]; mo = +m[2]; y = +m[3]; }
     else if ((m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2})$/.exec(t))) { d = +m[1]; mo = +m[2]; y = +m[3] >= 69 ? 1900 + +m[3] : 2000 + +m[3]; }
@@ -173,8 +183,58 @@
     return { games, categories: catCols.map(j => headers[j]) };
   }
 
+  // The Film Ratings tab: # | Film Name | Genre | Release Date | Date Watched | Rating  (+ optional Review, Tags, Poster)
+  function parseFilms(text) {
+    const rows = parseCsv(text.replace(/^\uFEFF/, ''));
+    if (!rows.length) return { films: [], columns: {} };
+    const headers = rows[0].map(h => h.trim());
+    const find = (...names) => { for (const n of names) { const i = headers.findIndex(h => h.toLowerCase() === n.toLowerCase()); if (i >= 0) return i; } return null; };
+    const iName = find('Film Name', 'Film', 'Movie', 'Title'), iGenre = find('Genre'), iRel = find('Release Date', 'Release'),
+      iWatched = find('Date Watched', 'Watched'), iRating = find('Rating', 'Overall'), iNum = find('#', 'No.'),
+      iReview = find('Review'), iTags = find('Tags', 'Tag'), iPoster = find('Poster');
+    if (iName === null || iRating === null) throw new Error("Couldn't find the 'Film Name' and 'Rating' columns in the Film Ratings tab.");
+    const cell = (row, i) => i === null ? '' : (row[i] || '').trim();
+    const films = [];
+    for (const row of rows.slice(1)) {
+      const name = cell(row, iName);
+      if (!name) continue;
+      const watched = cell(row, iWatched), genre = cell(row, iGenre);
+      const date = parseDate(watched), meta = {};
+      if (genre) meta.Type = genre;
+      if (date !== null) meta.Year = String(new Date(date).getUTCFullYear());
+      films.push({ id: films.length, number: cell(row, iNum), name, release: cell(row, iRel), watched, score: parseScore(cell(row, iRating)),
+        review: cell(row, iReview), tags: iTags !== null ? splitTags(cell(row, iTags)) : [], poster: cell(row, iPoster), meta, cats: [] });
+    }
+    const scored = films.filter(f => f.score !== null);
+    if (scored.length && scored.every(f => f.score <= 1) && scored.some(f => f.score > 0)) scored.forEach(f => { f.score = Math.round(f.score * 10000) / 100; });
+    const name = i => i === null ? null : headers[i];
+    return { films, columns: { title: name(iName), genre: name(iGenre), release: name(iRel), watched: name(iWatched), rating: name(iRating), review: name(iReview), tags: name(iTags), number: name(iNum) } };
+  }
+
+  // What the helper script needs to add a film to the Film Ratings tab.
+  function buildAddFilmPayload(o) {
+    const c = { title: 'Film Name', genre: 'Genre', release: 'Release Date', watched: 'Date Watched', rating: 'Rating', review: 'Review', tags: 'Tags', number: '#' };
+    for (const [k, v] of Object.entries(o.columns || {})) if (v) c[k] = v;      // use the sheet's own heading names
+    const fields = { [c.title]: o.name };
+    const dates = [];
+    if (o.genre) fields[c.genre] = o.genre;
+    if (o.releaseIso) { fields[c.release] = o.releaseIso; dates.push(c.release); }
+    if (o.watchedIso) { fields[c.watched] = o.watchedIso; dates.push(c.watched); }
+    fields[c.rating] = o.rating;
+    if (o.review) fields[c.review] = o.review;
+    const tags = splitTags(o.tags).join(', ');
+    if (tags) fields[c.tags] = tags;
+    return { key: o.key, sheet: o.sheet || 'Film Ratings', titleColumn: c.title, numberColumn: c.number, fields, dates };
+  }
+
+  // 'Running Man (1987)' -> { title: 'Running Man', year: 1987 }
+  function splitFilmTitle(name) {
+    const m = /^(.*?)\s*\((\d{4})\)\s*$/.exec(String(name || '').trim());
+    return m ? { title: m[1], year: +m[2] } : { title: String(name || '').trim(), year: null };
+  }
+
   // The address the app downloads the sheet from.
-  function sheetCsvUrl(s) {
+  function sheetCsvUrl(s, tabOverride) {
     const url = (s.sheetUrl || '').trim();
     if (!url) return null;
     if (!/^https?:\/\//.test(url)) return url;                  // a file next to the app (testing)
@@ -183,7 +243,8 @@
     if (!m) return null;
     let out = `https://docs.google.com/spreadsheets/d/${m[1]}/gviz/tq?tqx=out:csv&headers=1`;
     const gid = /[#&?]gid=(\d+)/.exec(url);
-    if (s.sheetTab) out += '&sheet=' + encodeURIComponent(s.sheetTab);
+    const tab = tabOverride || s.sheetTab;
+    if (tab) out += '&sheet=' + encodeURIComponent(tab);
     else if (gid) out += '&gid=' + gid[1];
     return out;
   }
@@ -209,8 +270,23 @@
     'Year: oldest first':     { get: g => numberIn(g.meta.Year), desc: false },
   };
 
-  function sortGames(games, sortName) {
-    const { get, desc } = SORTS[sortName] || SORTS['Sheet order'];
+  // Films have no categories or platforms, but they do have the date you watched them.
+  const watchedDate = g => parseDate(g.watched);
+  const MOVIE_SORTS = {
+    'Sheet order':           { get: g => g.id, desc: false },
+    'Rating: high to low':   { get: g => g.score, desc: true },
+    'Rating: low to high':   { get: g => g.score, desc: false },
+    'Name: A to Z':          { get: g => g.name.toLowerCase(), desc: false },
+    'Name: Z to A':          { get: g => g.name.toLowerCase(), desc: true },
+    'Watched: newest first': { get: watchedDate, desc: true },
+    'Watched: oldest first': { get: watchedDate, desc: false },
+    'Release: newest first': { get: g => parseDate(g.release), desc: true },
+    'Release: oldest first': { get: g => parseDate(g.release), desc: false },
+  };
+
+  function sortGames(games, sortName, table) {
+    const sorts = table || SORTS;
+    const { get, desc } = sorts[sortName] || sorts['Sheet order'];
     const have = games.filter(g => get(g) !== null && get(g) !== undefined);
     const lack = games.filter(g => get(g) === null || get(g) === undefined);   // always last
     have.sort((a, b) => {
@@ -223,6 +299,7 @@
 
   // ---------- grouping ----------
   const GROUPS = ['No grouping', 'Overall score', 'Genre', 'Platform', 'Year played'];
+  const MOVIE_GROUPS = ['No grouping', 'Overall score', 'Genre', 'Year watched'];
 
   function bandLabel(i, bands) {
     const low = bands[i].min;
@@ -235,7 +312,7 @@
   }
 
   function groupGames(games, mode, ranges) {
-    if (!GROUPS.includes(mode) || mode === 'No grouping' || !games.length) return [{ title: null, color: null, games }];
+    if (!(GROUPS.includes(mode) || MOVIE_GROUPS.includes(mode)) || mode === 'No grouping' || !games.length) return [{ title: null, color: null, games }];
     if (mode === 'Overall score') {
       const bands = ranges.slice().sort((a, b) => b.min - a.min);
       const buckets = bands.map(() => []), none = [];
@@ -250,12 +327,12 @@
       if (none.length) out.push({ title: 'No score yet', color: null, games: none });
       return out;
     }
-    const column = { 'Genre': 'Type', 'Platform': 'Platform', 'Year played': 'Year' }[mode];
-    const missing = { 'Genre': 'No genre', 'Platform': 'No platform', 'Year played': 'No year' }[mode];
+    const column = { 'Genre': 'Type', 'Platform': 'Platform', 'Year played': 'Year', 'Year watched': 'Year' }[mode];
+    const missing = { 'Genre': 'No genre', 'Platform': 'No platform', 'Year played': 'No year', 'Year watched': 'No date' }[mode];
     const buckets = new Map();
     for (const g of games) { const k = g.meta[column] || ''; if (!buckets.has(k)) buckets.set(k, []); buckets.get(k).push(g); }
     let names = [...buckets.keys()].filter(Boolean);
-    if (mode === 'Year played') names.sort((a, b) => (numberIn(b) || 0) - (numberIn(a) || 0));
+    if (mode === 'Year played' || mode === 'Year watched') names.sort((a, b) => (numberIn(b) || 0) - (numberIn(a) || 0));
     else names.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
     const out = names.map(n => ({ title: n, color: null, games: buckets.get(n) }));
     if (buckets.has('')) out.push({ title: missing, color: null, games: buckets.get('') });
@@ -389,7 +466,7 @@
     }));
   }
 
-  root.GR = { MAX_CATEGORY, isoToUtc, todayIso, daysBetween, formatIso, lastMeetup, friendDays, friendColourKey, daysLabel,
+  root.GR = { MOVIE_SORTS, MOVIE_GROUPS, parseFilms, buildAddFilmPayload, splitFilmTitle, MAX_CATEGORY, isoToUtc, todayIso, daysBetween, formatIso, lastMeetup, friendDays, friendColourKey, daysLabel,
     sortFriends, yearCounts, averageGap, longestGap, normalizeFriends, DEFAULTS, formatNumber, parseScore, numberIn, splitTags, parseDate, toIsoDate,
     parseCsv, parseSheet, sheetCsvUrl, colourFor, SORTS, sortGames, GROUPS, bandLabel, groupGames, FILTERS,
     gameValues, rankLines, comparePool, weightsFor, overallPercent, buildAddPayload, safeFileName };

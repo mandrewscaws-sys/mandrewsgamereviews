@@ -26,7 +26,7 @@ input[type=checkbox] { width: 18px; height: 18px; }
 .controls .count { color: var(--dim); font-size: 12px; white-space: nowrap; margin-left: auto; }
 
 /* ---- the grid ---- */
-#content { background: var(--teal); padding: 14px 14px 40px; min-height: calc(100vh - 110px); background-repeat: repeat; }
+#content, #movies { background: var(--teal); padding: 14px 14px 40px; min-height: calc(100vh - 110px); background-repeat: repeat; }
 .message { padding: 30px 6px; color: #fff; }
 .heading { display: inline-block; margin: 16px 0 12px; padding: 6px 16px; background: #14181a; border: 2px solid var(--line); border-radius: 6px; font-weight: 700; font-size: 17px; }
 .heading:first-child { margin-top: 0; }
@@ -35,7 +35,7 @@ input[type=checkbox] { width: 18px; height: 18px; }
 .tile:focus-visible { outline: 3px solid #fff; }
 .tile .cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .tile.nocover::before { content: "No cover"; position: absolute; left: 0; right: 0; top: 36%; text-align: center; color: #82888b; font-weight: 700; font-size: 8cqw; }
-.tile .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 17.3%; background: rgba(16, 19, 18, .94); display: flex; align-items: center; gap: 2.5cqw; padding: 0 2.7cqw; }
+.tile .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 17.3cqw; background: rgba(16, 19, 18, .94); display: flex; align-items: center; gap: 2.5cqw; padding: 0 2.7cqw; }
 .tile .plat { flex: none; height: 74%; max-width: 24cqw; display: flex; align-items: center; }
 .tile .plat img { max-height: 100%; max-width: 100%; }
 .tile .plat.text { font-size: 5cqw; font-weight: 700; align-self: flex-end; padding-bottom: 1.5cqw; height: auto; }
@@ -129,7 +129,7 @@ h3 { margin: 18px 0 8px; font-size: 16px; }
   .cmp-total { font-size: 30px; }
   .nav { gap: 6px; }
   .buttons button { padding: 6px 8px; font-size: 13px; }
-  #content { padding: 10px 10px 40px; }
+  #content, #movies { padding: 10px 10px 40px; }
   .grid { gap: 10px; }
   .gamehead { gap: 12px; padding: 12px 12px 4px; }
   .section { padding: 10px 12px; }
@@ -187,3 +187,16 @@ h3 { margin: 18px 0 8px; font-size: 16px; }
 .fr-preview .nophoto { width: 100%; height: 100%; }
 .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 50%; vertical-align: -2px; }
 .form input[type=number] { width: 80px; }
+
+/* ================= movies ================= */
+.tile.poster { aspect-ratio: 2 / 3; }
+.tile.poster.nocover::before { content: attr(data-name); top: 30%; padding: 0 8cqw; font-size: 9.5cqw; line-height: 1.2; color: #a9b3b6; }
+.gamehead .art.poster { width: 190px; aspect-ratio: 2 / 3; }
+.art.poster.nocover::before { content: attr(data-name); padding: 12px; text-align: center; font-size: 15px; color: #a9b3b6; }
+.cmp-grid .art.poster { aspect-ratio: 2 / 3; max-width: 190px; }
+.btnrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.cmp-diff { grid-column: 1 / -1; text-align: center; color: var(--dim); margin-top: 4px; }
+.attrib { color: rgba(255, 255, 255, .7); font-size: 11px; text-align: center; padding: 26px 10px 0; }
+.pickgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; padding: 12px 18px 30px; }
+.pick { cursor: pointer; font-size: 11px; color: var(--dim); text-align: center; }
+.pick img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; display: block; margin-bottom: 4px; background: #2c363a; }

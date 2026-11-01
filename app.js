@@ -46,7 +46,7 @@
   let area = 'menu';        // 'menu', 'games' or 'friends'
 
   // The status line belongs to whichever area is on screen.
-  const statuses = { games: '', friends: '' };
+  const statuses = { games: '', friends: '', movies: '' };
   function setStatus(text, which) {
     which = which || 'games';
     statuses[which] = text;
@@ -523,6 +523,9 @@
       const friendsBg = text(S.friendsBackground, { placeholder: 'friends-background.png (blank = plain colour)' });
       const friendsMirror = el('input', { type: 'checkbox' }); friendsMirror.checked = !!S.friendsBackgroundMirror;
       const menuFolder = text(S.menuFolder);
+      const filmTab = text(S.filmSheetTab), postersF = text(S.postersFolder), genresF = text(S.genresFolder);
+      const tmdbKey = text(S.tmdbKey, { placeholder: 'optional - paste your TMDB key' });
+      const movieColours = rangeEditor(S.movieRanges, 0, 100, 1);
 
       function rangeEditor(list, low, high, step) {
         const box = el('div', {});
@@ -586,8 +589,14 @@
           f('Cover size', el('div', {}, size, el('label', {}, sizeAuto, ' automatic for this screen'))),
           el('div', { class: 'sethead' }, 'Colours'),
           f('Overall score (out of 100)', overall.node), f('Category bars (out of 5)', bars.node),
-          el('div', { class: 'sethead' }, 'Adding games (stays on this device only)'),
+          el('div', { class: 'sethead' }, 'Adding games and films (stays on this device only)'),
           f('Helper web address', addUrl), f('Secret key', addKey),
+          el('div', { class: 'sethead' }, 'Movies'),
+          f('Film tab name', filmTab, 'The tab at the bottom of your sheet that holds your films.'),
+          f('Posters folder', postersF, 'Your own posters, named after the film: Alien.png. These win over looked-up ones.'),
+          f('Genre pictures folder', genresF, 'Small pictures named after the genre: Horror.png, Comedy.png.'),
+          f('TMDB key (this device only)', tmdbKey, 'Free key from themoviedb.org. With it, the app finds missing posters by itself. Leave blank to turn this off.'),
+          f('Rating colours (out of 100)', movieColours.node),
           el('div', { class: 'sethead' }, 'Friends (stays on this device only)'),
           f('Friends helper address', friendsUrl), f('Friends secret key', friendsKey),
           f('Colours', el('div', { class: 'rangerow' }, cGreen, ' green ', cAmber, ' amber ', cRed, ' red')),
@@ -624,6 +633,8 @@
             defaultGreenDays: Number(defGreen.value), defaultAmberDays: Number(defAmber.value),
             friendsBackground: friendsBg.value.trim(), friendsBackgroundMirror: friendsMirror.checked,
             menuFolder: menuFolder.value.trim() || 'menu',
+            filmSheetTab: filmTab.value.trim() || 'Film Ratings', postersFolder: postersF.value.trim() || 'posters',
+            genresFolder: genresF.value.trim() || 'genres', tmdbKey: tmdbKey.value.trim(), movieRanges: movieColours.read(),
             ranges: overall.read(), barRanges: bars.read(), genreWeightsV2: readWeights() });
           if (!G.sheetCsvUrl(next)) throw new Error("That doesn't look like a Google Sheet link.");
           if (next.addUrl && !/^https:\/\//.test(next.addUrl)) throw new Error('The helper web address should start with https://');
@@ -640,6 +651,7 @@
     resolved.clear(); applyBackground(); applyView(); renderMenu(); setHeader();
     applyBackgroundTo($('#friends'), S.friendsBackground, S.friendsBackgroundMirror);
     if (window.Friends) window.Friends.rerender();
+    if (window.Movies) window.Movies.rerender();
     if (sheetChanged) { lastText = null; refresh(false); }
   }
 
@@ -666,16 +678,19 @@
   const applyBackground = () => applyBackgroundTo($('#content'), S.backgroundImage, S.backgroundMirror);
 
   // ------------------------------------------------------------------ the menu and the areas
-  const TITLES = { menu: 'My Life', games: 'Game Reviews', friends: 'Friends' };
+  const TITLES = { menu: 'My Life', games: 'Game Reviews', movies: 'Movies', friends: 'Friends' };
 
   function setHeader() {
     document.title = TITLES[area];
     $('#title').textContent = TITLES[area];
     $('#btn-menu').hidden = area === 'menu';
     $('#controls').hidden = area !== 'games';
+    $('#movie-controls').hidden = area !== 'movies';
     $('#status').textContent = statuses[area] || '';
     const buttons = area === 'games'
       ? [['\u21BB', () => refresh(true), 'Refresh from the sheet'], ['Compare', () => openCompare()], ['\uFF0B Add', openAdd], ['\u2699', openSettings, 'Settings']]
+      : area === 'movies'
+        ? [['\u21BB', () => Movies.refresh(true), 'Refresh from the sheet'], ['Compare', () => Movies.compare()], ['\uFF0B Add', () => Movies.add()], ['\u2699', openSettings, 'Settings']]
       : area === 'friends'
         ? [['\u21BB', () => Friends.refresh(true), 'Refresh'], ['\uFF0B Add friend', () => Friends.addFriend()], ['\u2699', openSettings, 'Settings']]
         : [['\u2699', openSettings, 'Settings']];
@@ -687,10 +702,12 @@
     $('#menu').hidden = name !== 'menu';
     $('#content').hidden = name !== 'games';
     $('#friends').hidden = name !== 'friends';
+    $('#movies').hidden = name !== 'movies';
     if (push) history.pushState({ area: name, overlay: 0 }, '');
     setHeader();
     window.scrollTo(0, 0);
     if (name === 'friends' && window.Friends) window.Friends.onShow();
+    if (name === 'movies' && window.Movies) window.Movies.onShow();
   }
 
   function renderMenu() {
@@ -705,14 +722,14 @@
       loadPicture(img, S.menuFolder, label, () => img.remove(), () => t.classList.remove('texttile'));
       return t;
     };
-    menu.replaceChildren(el('div', { class: 'grid' }, tile('Game Reviews', 'games'), tile('Friends', 'friends')));
+    menu.replaceChildren(el('div', { class: 'grid' }, tile('Game Reviews', 'games'), tile('Movies', 'movies'), tile('Friends', 'friends')));
   }
 
   // ------------------------------------------------------------------ start up
   function start() {
     buildControls();
     $('#btn-menu').onclick = () => { if (history.state && history.state.area) history.back(); else showArea('menu', false); };
-    window.addEventListener('resize', () => { $('#content').style.setProperty('--tile', tileSize() + 'px'); $('#menu').style.setProperty('--tile', tileSize() + 'px'); });
+    window.addEventListener('resize', () => { for (const id of ['#content', '#menu', '#movies']) $(id).style.setProperty('--tile', tileSize() + 'px'); });
     history.replaceState(null, '');
     renderMenu();
     showArea('menu', false);
@@ -721,6 +738,6 @@
     refresh(false);
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
   }
-  window.GRApp = { el, toast, openOverlay, closeOverlay, closeAll, closeButton, swipe, settings: () => S, setStatus, loadPicture, applyBackgroundTo, openSettings, start };
+  window.GRApp = { el, toast, openOverlay, closeOverlay, closeAll, closeButton, swipe, settings: () => S, setStatus, loadPicture, applyBackgroundTo, openSettings, tileSize, start };
   window.__GR = { get games() { return allGames; }, get view() { return view; } };   // handy for testing
 })();
