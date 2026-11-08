@@ -46,7 +46,7 @@
   let area = 'menu';        // 'menu', 'games' or 'friends'
 
   // The status line belongs to whichever area is on screen.
-  const statuses = { games: '', friends: '', movies: '' };
+  const statuses = { games: '', friends: '', movies: '', finance: '' };
   function setStatus(text, which) {
     which = which || 'games';
     statuses[which] = text;
@@ -523,6 +523,9 @@
       const friendsBg = text(S.friendsBackground, { placeholder: 'friends-background.png (blank = plain colour)' });
       const friendsMirror = el('input', { type: 'checkbox' }); friendsMirror.checked = !!S.friendsBackgroundMirror;
       const menuFolder = text(S.menuFolder);
+      const financeUrl = text(S.financeUrl, { placeholder: 'https://script.google.com/macros/s/.../exec' }), financeKey = text(S.financeKey);
+      const pinLength = el('input', { type: 'number', min: 4, max: 8, step: 1, value: S.financePinLength });
+      const idleSecs = el('input', { type: 'number', min: 15, max: 1800, step: 15, value: S.financeIdleSeconds });
       const filmTab = text(S.filmSheetTab), postersF = text(S.postersFolder), genresF = text(S.genresFolder);
       const tmdbKey = text(S.tmdbKey, { placeholder: 'optional - paste your TMDB key' });
       const movieColours = rangeEditor(S.movieRanges, 0, 100, 1);
@@ -597,6 +600,10 @@
           f('Genre pictures folder', genresF, 'Small pictures named after the genre: Horror.png, Comedy.png.'),
           f('TMDB key (this device only)', tmdbKey, 'Free key from themoviedb.org. With it, the app finds missing posters by itself. Leave blank to turn this off.'),
           f('Rating colours (out of 100)', movieColours.node),
+          el('div', { class: 'sethead' }, 'Finances (stays on this device only)'),
+          f('Finance helper address', financeUrl), f('Finance secret key', financeKey),
+          f('PIN length', pinLength, 'How many digits your PIN has (4 or more). Your PIN is typed each time and is never saved on this phone.'),
+          f('Lock after (seconds)', idleSecs, 'Finances also locks when you leave it or switch to another app.'),
           el('div', { class: 'sethead' }, 'Friends (stays on this device only)'),
           f('Friends helper address', friendsUrl), f('Friends secret key', friendsKey),
           f('Colours', el('div', { class: 'rangerow' }, cGreen, ' green ', cAmber, ' amber ', cRed, ' red')),
@@ -629,6 +636,8 @@
             coverSize: sizeAuto.checked ? 0 : Number(size.value),
             addUrl: addUrl.value.trim(), addKey: addKey.value.trim(),
             friendsUrl: friendsUrl.value.trim(), friendsKey: friendsKey.value.trim(),
+            financeUrl: financeUrl.value.trim(), financeKey: financeKey.value.trim(),
+            financePinLength: Number(pinLength.value), financeIdleSeconds: Number(idleSecs.value),
             friendColours: { green: cGreen.value, amber: cAmber.value, red: cRed.value },
             defaultGreenDays: Number(defGreen.value), defaultAmberDays: Number(defAmber.value),
             friendsBackground: friendsBg.value.trim(), friendsBackgroundMirror: friendsMirror.checked,
@@ -639,6 +648,9 @@
           if (!G.sheetCsvUrl(next)) throw new Error("That doesn't look like a Google Sheet link.");
           if (next.addUrl && !/^https:\/\//.test(next.addUrl)) throw new Error('The helper web address should start with https://');
           if (next.friendsUrl && !/^https:\/\//.test(next.friendsUrl)) throw new Error('The Friends helper address should start with https://');
+          if (next.financeUrl && !/^https:\/\//.test(next.financeUrl)) throw new Error('The Finance helper address should start with https://');
+          if (!Number.isInteger(next.financePinLength) || next.financePinLength < 4 || next.financePinLength > 8) throw new Error('The PIN length should be a whole number from 4 to 8.');
+          if (!Number.isFinite(next.financeIdleSeconds) || next.financeIdleSeconds < 15) throw new Error('Lock after should be at least 15 seconds.');
           if (![next.defaultGreenDays, next.defaultAmberDays].every(n => Number.isInteger(n) && n >= 0) || next.defaultAmberDays < next.defaultGreenDays)
             throw new Error('For new friends, green and amber should be whole numbers of days, with amber the same as green or more.');
           const sheetChanged = G.sheetCsvUrl(next) !== G.sheetCsvUrl(S);
@@ -652,6 +664,7 @@
     applyBackgroundTo($('#friends'), S.friendsBackground, S.friendsBackgroundMirror);
     if (window.Friends) window.Friends.rerender();
     if (window.Movies) window.Movies.rerender();
+    if (window.Finance) window.Finance.rerender();
     if (sheetChanged) { lastText = null; refresh(false); }
   }
 
@@ -678,7 +691,7 @@
   const applyBackground = () => applyBackgroundTo($('#content'), S.backgroundImage, S.backgroundMirror);
 
   // ------------------------------------------------------------------ the menu and the areas
-  const TITLES = { menu: 'My Life', games: 'Game Reviews', movies: 'Movies', friends: 'Friends' };
+  const TITLES = { menu: 'My Life', games: 'Game Reviews', movies: 'Movies', friends: 'Friends', finance: 'Finances' };
 
   function setHeader() {
     document.title = TITLES[area];
@@ -693,21 +706,26 @@
         ? [['\u21BB', () => Movies.refresh(true), 'Refresh from the sheet'], ['Compare', () => Movies.compare()], ['\uFF0B Add', () => Movies.add()], ['\u2699', openSettings, 'Settings']]
       : area === 'friends'
         ? [['\u21BB', () => Friends.refresh(true), 'Refresh'], ['\uFF0B Add friend', () => Friends.addFriend()], ['\u2699', openSettings, 'Settings']]
+      : area === 'finance'
+        ? [['\u21BB', () => Finance.refresh(true), 'Refresh'], ['\uD83D\uDD12 Lock', () => Finance.lock(), 'Lock now'], ['\u2699', openSettings, 'Settings']]
         : [['\u2699', openSettings, 'Settings']];
     $('#buttons').replaceChildren(...buttons.map(([label, handler, title]) => el('button', { onclick: handler, title: title || '' }, label)));
   }
 
   function showArea(name, push) {
+    if (area === 'finance' && name !== 'finance' && window.Finance) window.Finance.lock();     // always lock when you leave
     area = name;
     $('#menu').hidden = name !== 'menu';
     $('#content').hidden = name !== 'games';
     $('#friends').hidden = name !== 'friends';
     $('#movies').hidden = name !== 'movies';
+    $('#finance').hidden = name !== 'finance';
     if (push) history.pushState({ area: name, overlay: 0 }, '');
     setHeader();
     window.scrollTo(0, 0);
     if (name === 'friends' && window.Friends) window.Friends.onShow();
     if (name === 'movies' && window.Movies) window.Movies.onShow();
+    if (name === 'finance' && window.Finance) window.Finance.onShow();
   }
 
   function renderMenu() {
@@ -722,7 +740,7 @@
       loadPicture(img, S.menuFolder, label, () => img.remove(), () => t.classList.remove('texttile'));
       return t;
     };
-    menu.replaceChildren(el('div', { class: 'grid' }, tile('Game Reviews', 'games'), tile('Movies', 'movies'), tile('Friends', 'friends')));
+    menu.replaceChildren(el('div', { class: 'grid' }, tile('Game Reviews', 'games'), tile('Movies', 'movies'), tile('Friends', 'friends'), tile('Finances', 'finance')));
   }
 
   // ------------------------------------------------------------------ start up

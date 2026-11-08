@@ -25,6 +25,10 @@
       { min: 60, color: '#ff9f1c' },
       { min: 0,  color: '#e63946' },
     ],
+    financeUrl: '',                     // the Finance helper web address (kept on this device only)
+    financeKey: '',                     // the Finance secret key (kept on this device only)
+    financePinLength: 4,                // how many digits your Finance PIN has (the PIN itself is never saved)
+    financeIdleSeconds: 120,            // Finances locks itself after this long with nothing touched
     menuFolder: 'menu',                 // optional pictures for the menu tiles (Game Reviews.png, Friends.png)
     friendsUrl: '',                     // the Friends helper web address (kept on this device only)
     friendsKey: '',                     // the Friends secret key (kept on this device only)
@@ -466,7 +470,14 @@
     }));
   }
 
-  root.GR = { MOVIE_SORTS, MOVIE_GROUPS, parseFilms, buildAddFilmPayload, splitFilmTitle, MAX_CATEGORY, isoToUtc, todayIso, daysBetween, formatIso, lastMeetup, friendDays, friendColourKey, daysLabel,
+  // The forecast maths: value after each month. Deposits go in at the end of the month.
+  function projectScenario(start, growth, deposit, months) {
+    const out = [start];
+    for (let i = 1; i <= (months === undefined ? 240 : months); i++) out.push(out[i - 1] * (1 + growth) + deposit);
+    return out;
+  }
+
+  root.GR = { projectScenario, MOVIE_SORTS, MOVIE_GROUPS, parseFilms, buildAddFilmPayload, splitFilmTitle, MAX_CATEGORY, isoToUtc, todayIso, daysBetween, formatIso, lastMeetup, friendDays, friendColourKey, daysLabel,
     sortFriends, yearCounts, averageGap, longestGap, normalizeFriends, DEFAULTS, formatNumber, parseScore, numberIn, splitTags, parseDate, toIsoDate,
     parseCsv, parseSheet, sheetCsvUrl, colourFor, SORTS, sortGames, GROUPS, bandLabel, groupGames, FILTERS,
     gameValues, rankLines, comparePool, weightsFor, overallPercent, buildAddPayload, safeFileName };
