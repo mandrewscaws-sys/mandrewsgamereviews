@@ -246,3 +246,33 @@ h3 { margin: 18px 0 8px; font-size: 16px; }
 .fin-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; margin: 6px 0 10px; }
 .fin-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
 #finance h3 { margin: 18px 0 8px; }
+
+/* ================= christmas food ================= */
+#christmas { background: radial-gradient(ellipse at 20% 0%, #5a1626 0%, transparent 60%), radial-gradient(ellipse at 90% 100%, #123d2a 0%, transparent 55%), #14181a; min-height: calc(100vh - 56px); padding: 12px 14px 60px; }
+.xm-search { background: rgba(0, 0, 0, .35); border-radius: 8px; padding: 12px; }
+.xm-row { display: flex; gap: 8px; }
+.xm-row input { flex: 1; min-width: 0; font-size: 16px; padding: 10px; }
+.xm-check { display: block; margin-top: 8px; font-size: 13px; color: var(--dim); }
+.xm-results h3, .xm-browse h3, .xm-notehead h3 { margin: 18px 0 8px; }
+.xm-compare { display: block; text-align: center; background: #2b3338; color: #fff; padding: 11px; border-radius: 6px; text-decoration: none; font-weight: 700; margin-bottom: 8px; }
+.xm-store { display: flex; align-items: center; gap: 10px; background: rgba(0, 0, 0, .35); border-radius: 8px; padding: 9px 10px; margin: 7px 0; }
+.xm-store i, .xm-entry i { width: 10px; align-self: stretch; border-radius: 4px; flex: none; }
+.xm-name { flex: 1; min-width: 0; display: grid; }
+.xm-name small { color: var(--dim); font-size: 11px; }
+.xm-open { background: #22b14c; color: #fff; text-decoration: none; padding: 9px 14px; border-radius: 6px; font-weight: 700; }
+.xm-group { margin-bottom: 10px; }
+.xm-gt { color: var(--dim); font-size: 12px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+.xm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.xm-chip { background: rgba(255, 255, 255, .1); border-radius: 16px; padding: 7px 12px; }
+.xm-notehead { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
+.xm-notehead button { margin-left: 6px; }
+.xm-ghead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.xm-entry { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid #22313a; }
+.xm-what { flex: 1; min-width: 0; display: grid; }
+.xm-what small { color: var(--dim); font-size: 12px; overflow-wrap: anywhere; }
+.xm-price { font-weight: 800; font-size: 17px; }
+.xm-entry.best .xm-price { color: #4ade80; }
+.xm-entry button { padding: 4px 8px; }
+.xm-foot { color: var(--dim); font-size: 12px; margin-top: 22px; line-height: 1.5; }
+.xm-erow { display: grid; grid-template-columns: 1fr; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.xm-erow input { width: 100%; }

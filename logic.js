@@ -29,6 +29,17 @@
     financeKey: '',                     // the Finance secret key (kept on this device only)
     financePinLength: 4,                // how many digits your Finance PIN has (the PIN itself is never saved)
     financeIdleSeconds: 120,            // Finances locks itself after this long with nothing touched
+    // Christmas Food: where each shop's own search page lives. {q} is replaced by your search words.
+    xmasStores: [
+      { name: 'Tesco',      url: 'https://www.tesco.com/groceries/en-GB/search?query={q}',        card: 'Clubcard',          color: '#00539f' },
+      { name: "Sainsbury's", url: 'https://www.sainsburys.co.uk/gol-ui/SearchResults/{q}',          card: 'Nectar',            color: '#f06c00' },
+      { name: 'Morrisons',  url: 'https://groceries.morrisons.com/search?entry={q}',               card: 'More Card',         color: '#007531' },
+      { name: 'M&S',        url: 'https://www.marksandspencer.com/search?searchTerm={q}',          card: 'Sparks',            color: '#a3a3a3' },
+      { name: 'Aldi',       url: 'https://www.google.com/search?q=site%3Aaldi.co.uk+{q+}',         card: '',                  color: '#00aadb' },
+      { name: 'Lidl',       url: 'https://www.google.com/search?q=site%3Alidl.co.uk+{q+}',         card: 'Lidl Plus',         color: '#0050aa' },
+      { name: 'Co-op',      url: 'https://www.google.com/search?q=site%3Acoop.co.uk+{q+}',         card: 'Co-op membership',  color: '#00b1eb' },
+    ],
+    xmasCompareUrl: 'https://www.trolley.co.uk/search/?q={q+}',
     menuFolder: 'menu',                 // optional pictures for the menu tiles (Game Reviews.png, Friends.png)
     friendsUrl: '',                     // the Friends helper web address (kept on this device only)
     friendsKey: '',                     // the Friends secret key (kept on this device only)
@@ -477,7 +488,36 @@
     return out;
   }
 
-  root.GR = { projectScenario, MOVIE_SORTS, MOVIE_GROUPS, parseFilms, buildAddFilmPayload, splitFilmTitle, MAX_CATEGORY, isoToUtc, todayIso, daysBetween, formatIso, lastMeetup, friendDays, friendColourKey, daysLabel,
+  // ---------- Christmas food ----------
+  // 'spring rolls' + 'https://shop/search?q={q}' -> 'https://shop/search?q=spring%20rolls'   ({q+} puts + between words)
+  function buildStoreUrl(template, query) {
+    const words = String(query || '').trim().replace(/\s+/g, ' ');
+    return String(template || '').split('{q+}').join(encodeURIComponent(words).replace(/%20/g, '+')).split('{q}').join(encodeURIComponent(words));
+  }
+
+  const XMAS_GROUPS = [
+    ['Party food', ['spring rolls', 'sausage rolls', 'mini quiches', 'samosas', 'onion bhajis', 'prawn toast', 'mozzarella sticks', 'garlic bread', 'party platter', 'dips', 'nibbles']],
+    ['Christmas dinner', ['turkey', 'turkey crown', 'gammon', 'beef joint', 'nut roast', 'salmon', 'christmas dinner for one']],
+    ['Trimmings', ['pigs in blankets', 'stuffing', 'cranberry sauce', 'brussels sprouts', 'roast potatoes', 'red cabbage', 'gravy', 'bread sauce']],
+    ['Sweet treats', ['mince pies', 'christmas pudding', 'christmas cake', 'yule log', 'stollen', 'trifle', 'panettone', 'chocolates', 'christmas biscuits']],
+    ['Cheese & deli', ['cheese board', 'brie', 'stilton', 'pate', 'smoked salmon', 'cured meats', 'cheese biscuits', 'chutney']],
+  ];
+
+  // Price notes: [{ id, item, store, size, price, deal, date }] grouped by item, cheapest per pack first.
+  function groupPriceNotes(notes) {
+    const groups = new Map();
+    for (const n of notes) {
+      const key = String(n.item).trim().toLowerCase();
+      if (!groups.has(key)) groups.set(key, { item: String(n.item).trim(), entries: [] });
+      groups.get(key).entries.push(n);
+    }
+    const out = [...groups.values()];
+    out.forEach(g => g.entries.sort((a, b) => a.price - b.price || a.store.localeCompare(b.store)));
+    out.forEach(g => { g.cheapest = g.entries[0].price; });
+    return out.sort((a, b) => a.item.toLowerCase().localeCompare(b.item.toLowerCase()));
+  }
+
+  root.GR = { buildStoreUrl, XMAS_GROUPS, groupPriceNotes, projectScenario, MOVIE_SORTS, MOVIE_GROUPS, parseFilms, buildAddFilmPayload, splitFilmTitle, MAX_CATEGORY, isoToUtc, todayIso, daysBetween, formatIso, lastMeetup, friendDays, friendColourKey, daysLabel,
     sortFriends, yearCounts, averageGap, longestGap, normalizeFriends, DEFAULTS, formatNumber, parseScore, numberIn, splitTags, parseDate, toIsoDate,
     parseCsv, parseSheet, sheetCsvUrl, colourFor, SORTS, sortGames, GROUPS, bandLabel, groupGames, FILTERS,
     gameValues, rankLines, comparePool, weightsFor, overallPercent, buildAddPayload, safeFileName };
